@@ -4,13 +4,10 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	"github.com/codegangsta/cli"
 	"github.com/coreos/go-semver/semver"
-	"github.com/fatih/color"
+	"github.com/octoblu/find-yourself/scanner"
 	De "github.com/tj/go-debug"
 )
 
@@ -21,54 +18,36 @@ func main() {
 	app.Name = "find-yourself"
 	app.Version = version()
 	app.Action = run
-	app.Flags = []cli.Flag{
-		cli.StringFlag{
-			Name:   "example, e",
-			EnvVar: "FIND_YOURSELF_EXAMPLE",
-			Usage:  "Example string flag",
-		},
-	}
+	app.Flags = []cli.Flag{}
 	app.Run(os.Args)
+
+	select {} // Block forever
 }
 
 func run(context *cli.Context) {
-	example := getOpts(context)
+	getOpts(context)
 
-	sigTerm := make(chan os.Signal)
-	signal.Notify(sigTerm, syscall.SIGTERM)
+	deviceScanner, err := scanner.New()
+	fatalIfError("scanner.New failed", err)
 
-	sigTermReceived := false
-
-	go func() {
-		<-sigTerm
-		fmt.Println("SIGTERM received, waiting to exit")
-		sigTermReceived = true
-	}()
-
-	for {
-		if sigTermReceived {
-			fmt.Println("I'll be back.")
-			os.Exit(0)
-		}
-
-		debug("find-yourself.loop: %v", example)
-		time.Sleep(1 * time.Second)
-	}
+	deviceScanner.OnNewDeviceScanned(onNewDeviceScanned)
+	deviceScanner.Scan()
 }
 
-func getOpts(context *cli.Context) string {
-	example := context.String("example")
-
-	if example == "" {
-		cli.ShowAppHelp(context)
-
-		if example == "" {
-			color.Red("  Missing required flag --example or FIND_YOURSELF_EXAMPLE")
-		}
-		os.Exit(1)
+func fatalIfError(msg string, err error) {
+	if err == nil {
+		return
 	}
 
-	return example
+	log.Fatalf(msg, err.Error())
+}
+
+func getOpts(context *cli.Context) {
+	return
+}
+
+func onNewDeviceScanned() {
+	fmt.Println("onNewDeviceScanned")
 }
 
 func version() string {
